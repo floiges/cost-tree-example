@@ -6,27 +6,27 @@ import type { CostNode } from '../utils/dataProcessor';
 
 // extend(THREE); // Removed to fix TS error and not needed for standard elements
 
-// Modern color scheme - gradient from deep blue to gold representing cost flow
+// Natural color scheme - Browns for branches, Greens for leaves
 const getCostColor = (ratio: number, isLeaf = false): string => {
     if (isLeaf) {
-        // Leaves: gradient from green (low) to orange/red (high)
-        if (ratio > 0.15) return '#ff6b6b'; // High cost - red
-        if (ratio > 0.08) return '#ffa94d'; // Medium-high - orange
-        if (ratio > 0.04) return '#ffd43b'; // Medium - yellow
-        if (ratio > 0.02) return '#a9e34b'; // Low-medium - lime
-        return '#69db7c'; // Low - green
+        // Leaves: Varying shades of green based on size/cost
+        if (ratio > 0.15) return '#1a472a'; // Deep forest green
+        if (ratio > 0.08) return '#2d5a27'; // Dark green
+        if (ratio > 0.04) return '#43a047'; // Medium green
+        if (ratio > 0.02) return '#66bb6a'; // Fresh green
+        return '#81c784'; // Light green
     }
 
-    // Branches: gradient from deep purple (root) to lighter blue
-    if (ratio > 0.3) return '#6366f1'; // High - indigo
-    if (ratio > 0.15) return '#8b5cf6'; // Medium-high - purple
-    if (ratio > 0.08) return '#a78bfa'; // Medium - light purple
-    return '#c4b5fd'; // Low - very light purple
+    // Branches: Wood/Bark textured colors
+    if (ratio > 0.3) return '#3e2723'; // Dark Mahogany
+    if (ratio > 0.15) return '#4e342e'; // Dark Walnut
+    if (ratio > 0.08) return '#5d4037'; // Medium Brown
+    return '#795548'; // Light Brown
 };
 
-const getEmissiveIntensity = (ratio: number): number => {
-    // Higher cost items glow more
-    return Math.min(0.3 + ratio * 2, 0.8);
+const getEmissiveIntensity = (_ratio: number): number => {
+    // Real trees don't emit light typically
+    return 0;
 };
 
 interface BranchProps {
@@ -53,6 +53,7 @@ const Branch: React.FC<BranchProps> = ({
   onNodeClick
 }) => {
   const meshRef = useRef<THREE.Mesh>(null);
+  const swayRef = useRef<THREE.Group>(null);
   const [hovered, setHover] = useState(false);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -95,17 +96,15 @@ const Branch: React.FC<BranchProps> = ({
     };
   }, []);
 
-  // Animate gentle pulse and flow effect
+  // Sway animation for a natural feel
   useFrame((state) => {
-      if (meshRef.current?.material) {
+      if (swayRef.current) {
           const t = state.clock.getElapsedTime();
-          const mat = meshRef.current.material as THREE.MeshStandardMaterial;
-          if (mat.emissiveIntensity !== undefined) {
-             // Pulsing glow effect based on cost importance
-             const baseIntensity = getEmissiveIntensity(globalRatio);
-             const pulse = Math.sin(t * 1.5 + level * 0.5) * 0.1;
-             mat.emissiveIntensity = hovered ? baseIntensity + 0.5 : baseIntensity + pulse;
-          }
+          // Gentle wind sway
+          const swayAmount = 0.03 * Math.max(0, level - 1); // More sway at tips
+          const swaySpeed = 0.8;
+          swayRef.current.rotation.z = Math.sin(t * swaySpeed + position[1] * 0.1) * swayAmount;
+          swayRef.current.rotation.x = Math.cos(t * swaySpeed * 0.7 + position[0] * 0.1) * swayAmount * 0.5;
       }
   });
 
@@ -164,51 +163,49 @@ const Branch: React.FC<BranchProps> = ({
 
     return (
         <group position={position} rotation={rotation as any}>
-          {/* Connecting stem to make leaf-branch connection clear */}
+          <group ref={swayRef}>
+          {/* Connect branch to leaf cluster */}
           <mesh
             position={[0, stemLength / 2, 0]}
             castShadow
           >
-            <cylinderGeometry args={[radius * 0.3, radius, stemLength, 8]} />
+            <cylinderGeometry args={[radius * 0.3, radius, stemLength, 6]} />
             <meshStandardMaterial
-                color={leafColor}
-                emissive={leafColor}
-                emissiveIntensity={0.2}
-                roughness={0.5}
-                metalness={0.5}
+                color="#5d4037"
+                roughness={0.9}
             />
           </mesh>
 
-          {/* Leaf sphere */}
+          {/* Leaf Cluster (Foliage) */}
           <mesh
             ref={meshRef}
-            position={[0, stemLength + leafScale * 0.5, 0]}
+            position={[0, stemLength + leafScale * 0.4, 0]}
             onPointerEnter={handlePointerEnter}
             onPointerLeave={handlePointerLeave}
             onClick={handleClick}
             castShadow
           >
-            <sphereGeometry args={[leafScale, 20, 20]} />
+            {/* Low-poly look for stylized realism */}
+            <dodecahedronGeometry args={[leafScale, 0]} />
             <meshStandardMaterial
-                color={hovered ? '#ffffff' : leafColor}
-                emissive={leafColor}
-                emissiveIntensity={hovered ? 1.2 : getEmissiveIntensity(globalRatio)}
-                roughness={0.2}
-                metalness={0.8}
+                color={hovered ? '#a3e635' : leafColor}
+                roughness={0.8}
+                metalness={0.1}
+                flatShading={true}
             />
           </mesh>
 
-          {/* Glow ring effect on hover */}
+          {/* Selection highlight (subtle outline instead of glow) */}
           {hovered && (
-            <mesh position={[0, stemLength + leafScale * 0.5, 0]}>
-              <ringGeometry args={[leafScale * 1.2, leafScale * 1.5, 32]} />
-              <meshBasicMaterial
-                color={leafColor}
-                transparent
-                opacity={0.6}
-                side={THREE.DoubleSide}
-              />
-            </mesh>
+             <mesh position={[0, stemLength + leafScale * 0.4, 0]}>
+               <dodecahedronGeometry args={[leafScale * 1.05, 0]} />
+               <meshBasicMaterial
+                 color="#d4f48d"
+                 transparent
+                 opacity={0.3}
+                 wireframe
+               />
+             </mesh>
           )}
 
           {/* Name label for leaves - always show with dynamic font size */}
@@ -252,6 +249,7 @@ const Branch: React.FC<BranchProps> = ({
                 </div>
               </Html>
           )}
+          </group>
         </group>
     );
   }
@@ -261,6 +259,7 @@ const Branch: React.FC<BranchProps> = ({
 
   return (
     <group position={position} rotation={rotation as any}>
+      <group ref={swayRef}>
       <mesh
         ref={meshRef}
         position={[0, length / 2, 0]}
@@ -270,39 +269,23 @@ const Branch: React.FC<BranchProps> = ({
         castShadow
         receiveShadow
       >
-        <cylinderGeometry args={[radiusTop, radius, length, 16]} />
+        <cylinderGeometry args={[radiusTop, radius, length, 12]} />
         <meshStandardMaterial
-            color={hovered ? '#ffffff' : branchColor}
+            color={hovered ? '#8d6e63' : branchColor}
             emissive={branchColor}
-            emissiveIntensity={hovered ? 0.8 : 0}
-            roughness={0.4}
-            metalness={0.7}
+            emissiveIntensity={0}
+            roughness={0.9} // Bark is rough
+            metalness={0.1} // Bark is not metallic
+            flatShading={false}
         />
       </mesh>
 
-      {/* Glow ring effect on hover for branches */}
-      {hovered && (
         <>
           <mesh position={[0, length, 0]} rotation={[Math.PI / 2, 0, 0]}>
-            <ringGeometry args={[radiusTop * 1.5, radiusTop * 2, 32]} />
-            <meshBasicMaterial
-              color={branchColor}
-              transparent
-              opacity={0.5}
-              side={THREE.DoubleSide}
-            />
-          </mesh>
-          <mesh position={[0, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
-            <ringGeometry args={[radius * 1.5, radius * 2, 32]} />
-            <meshBasicMaterial
-              color={branchColor}
-              transparent
-              opacity={0.5}
-              side={THREE.DoubleSide}
-            />
+            <ringGeometry args={[radiusTop * 1.2, radiusTop * 1.4, 32]} />
+            <meshBasicMaterial color="#a3e635" transparent opacity={0.4} side={THREE.DoubleSide} />
           </mesh>
         </>
-      )}
 
       {/* Name label for major branches */}
       {localRatio > 0.08 && level < 5 && (
@@ -355,6 +338,7 @@ const Branch: React.FC<BranchProps> = ({
       )}
 
       {childBranches}
+      </group>
     </group>
   );
 };
@@ -384,8 +368,9 @@ const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, rootTotalCost, 
       backdropFilter: 'blur(16px)',
       padding: '25px 30px',
       borderRadius: '16px',
+      borderRadius: '16px',
       boxShadow: '0 12px 48px rgba(0, 0, 0, 0.15)',
-      border: '2px solid rgba(99, 102, 241, 0.3)',
+      border: '2px solid rgba(46, 125, 50, 0.2)',
       minWidth: '320px',
       maxWidth: '400px',
       fontFamily: "'Inter', -apple-system, sans-serif",
@@ -429,7 +414,7 @@ const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, rootTotalCost, 
         fontSize: '0.75rem',
         fontWeight: 600,
         letterSpacing: '1.5px',
-        color: '#6366f1',
+        color: '#2e7d32',
         marginBottom: '12px',
         textTransform: 'uppercase'
       }}>
@@ -440,7 +425,7 @@ const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, rootTotalCost, 
       <div style={{
         display: 'inline-block',
         padding: '4px 12px',
-        background: isLeaf ? 'linear-gradient(135deg, #10b981, #059669)' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+        background: isLeaf ? 'linear-gradient(135deg, #2e7d32, #1b5e20)' : 'linear-gradient(135deg, #5d4037, #3e2723)',
         color: 'white',
         borderRadius: '6px',
         fontSize: '0.7rem',
@@ -466,7 +451,7 @@ const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, rootTotalCost, 
       {/* Divider */}
       <div style={{
         height: '2px',
-        background: 'linear-gradient(90deg, rgba(99, 102, 241, 0.4), transparent)',
+        background: 'linear-gradient(90deg, rgba(46, 125, 50, 0.4), transparent)',
         marginBottom: '20px',
         borderRadius: '2px'
       }}></div>
@@ -489,7 +474,7 @@ const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, rootTotalCost, 
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: '0.9rem', color: '#6b7280', fontWeight: 500 }}>Total Cost:</span>
-          <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#6366f1', fontFamily: 'monospace' }}>
+          <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#3e2723', fontFamily: 'monospace' }}>
             ¥{node.totalCost.toLocaleString()}
           </span>
         </div>
@@ -499,7 +484,7 @@ const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, rootTotalCost, 
           <span style={{
             fontSize: '1.3rem',
             fontWeight: 700,
-            color: '#10b981',
+            color: '#2e7d32',
             fontFamily: 'monospace'
           }}>
             {percentage}%
@@ -509,7 +494,7 @@ const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, rootTotalCost, 
         {!isLeaf && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '0.9rem', color: '#6b7280', fontWeight: 500 }}>Children:</span>
-            <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#8b5cf6' }}>
+            <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#5d4037' }}>
               {node.children.length}
             </span>
           </div>
@@ -552,7 +537,7 @@ const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, rootTotalCost, 
                   }}
                 >
                   <span style={{ color: '#374151', fontWeight: 500 }}>{child.name}</span>
-                  <span style={{ color: '#6366f1', fontWeight: 700, fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                  <span style={{ color: '#3e2723', fontWeight: 700, fontFamily: 'monospace', fontSize: '0.8rem' }}>
                     ¥{child.totalCost.toLocaleString()}
                   </span>
                 </div>
@@ -566,7 +551,7 @@ const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, rootTotalCost, 
       <div style={{
         marginTop: '20px',
         padding: '12px',
-        background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1))',
+        background: 'linear-gradient(135deg, rgba(46, 125, 50, 0.1), rgba(93, 64, 55, 0.1))',
         borderRadius: '8px',
         fontSize: '0.75rem',
         color: '#6b7280',
@@ -613,7 +598,7 @@ const UIOverlay: React.FC<{ rootTotalCost: number }> = ({ rootTotalCost }) => {
                 fontSize: '0.75rem',
                 fontWeight: 600,
                 letterSpacing: '1.5px',
-                color: '#6366f1',
+                color: '#2e7d32',
                 marginBottom: '15px',
                 textTransform: 'uppercase'
             }}>
@@ -639,7 +624,7 @@ const UIOverlay: React.FC<{ rootTotalCost: number }> = ({ rootTotalCost }) => {
                     alignItems: 'baseline',
                     gap: '5px'
                 }}>
-                    <span style={{ fontSize: '1.2rem', color: '#6366f1' }}>¥</span>
+                    <span style={{ fontSize: '1.2rem', color: '#2e7d32' }}>¥</span>
                     {rootTotalCost.toLocaleString()}
                 </div>
             </div>
@@ -666,11 +651,11 @@ const UIOverlay: React.FC<{ rootTotalCost: number }> = ({ rootTotalCost }) => {
                     <div style={{
                         width: '30px',
                         height: '4px',
-                        background: 'linear-gradient(90deg, #c4b5fd, #6366f1)',
+                        background: 'linear-gradient(90deg, #795548, #3e2723)',
                         borderRadius: '2px'
                     }}></div>
                     <span style={{ fontSize: '0.8rem', color: '#374151' }}>
-                        Cost Flow (Light to Dark)
+                        Branch (Cost = Thickness)
                     </span>
                 </div>
 
@@ -678,12 +663,12 @@ const UIOverlay: React.FC<{ rootTotalCost: number }> = ({ rootTotalCost }) => {
                     <div style={{
                         width: '10px',
                         height: '10px',
-                        background: 'linear-gradient(135deg, #69db7c, #ff6b6b)',
+                        background: 'linear-gradient(135deg, #66bb6a, #1b5e20)',
                         borderRadius: '50%',
-                        boxShadow: '0 2px 8px rgba(255, 107, 107, 0.3)'
+                        boxShadow: '0 2px 4px rgba(27, 94, 32, 0.3)'
                     }}></div>
                     <span style={{ fontSize: '0.8rem', color: '#374151' }}>
-                        Cost Items (Size = Amount)
+                        Leaves (Foliage Clusters)
                     </span>
                 </div>
 
@@ -760,38 +745,37 @@ const ThreeTree: React.FC<ThreeTreeProps> = ({ data, rootTotalCost }) => {
             autoRotateSpeed={0.5}
         />
 
-        {/* Modern gradient sky */}
-        <color attach="background" args={['#f0f4f8']} />
-        <fog attach="fog" args={['#f0f4f8', 80, 250]} />
+        {/* Natural Sky */}
+        <color attach="background" args={['#dbeafe']} />
+        <fog attach="fog" args={['#dbeafe', 60, 200]} />
 
-        {/* Enhanced lighting for better visibility */}
-        <ambientLight intensity={0.6} />
+        {/* Natural Lighting */}
+        <ambientLight intensity={0.7} />
+        {/* Sun light */}
         <directionalLight
-            position={[40, 80, 40]}
-            intensity={1.2}
+            position={[50, 80, 20]}
+            intensity={1.5}
             castShadow
             shadow-mapSize={[2048, 2048]}
-            shadow-camera-far={200}
-            shadow-camera-left={-50}
-            shadow-camera-right={50}
-            shadow-camera-top={50}
-            shadow-camera-bottom={-50}
+            shadow-bias={-0.0001}
+            color="#fffcd4" // Warm sunlight
         />
+        {/* Fill light */}
         <directionalLight
-            position={[-40, 60, -40]}
+            position={[-40, 20, -40]}
             intensity={0.4}
-            color="#a78bfa"
+            color="#bae6fd" // Skylight fill
         />
-        <hemisphereLight intensity={0.4} groundColor="#e0e7ff" color="#ffffff" />
+        <hemisphereLight intensity={0.3} groundColor="#5d4037" color="#bae6fd" />
 
         <group position={[0, -35, 0]}>
-            {/* Modern ground plane */}
+            {/* Grassy Ground */}
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-                <planeGeometry args={[400, 400]} />
+                <planeGeometry args={[500, 500]} />
                 <meshStandardMaterial
-                  color="#e0e7ff"
-                  roughness={0.8}
-                  metalness={0.2}
+                  color="#c5e1a5" // Light grass green
+                  roughness={1}
+                  metalness={0}
                 />
             </mesh>
 
@@ -842,12 +826,12 @@ const ThreeTree: React.FC<ThreeTreeProps> = ({ data, rootTotalCost }) => {
         <style>{`
             .tooltip-container {
                 background: rgba(255, 255, 255, 0.95);
-                border: 2px solid rgba(99, 102, 241, 0.3);
+                border: 2px solid rgba(46, 125, 50, 0.2);
                 padding: 16px 20px;
                 border-radius: 16px;
                 pointer-events: none;
                 backdrop-filter: blur(16px);
-                box-shadow: 0 12px 48px rgba(99, 102, 241, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.5);
+                box-shadow: 0 12px 48px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.5);
                 min-width: 200px;
                 color: #1a1a1a;
                 font-family: 'Inter', -apple-system, sans-serif;
@@ -859,15 +843,15 @@ const ThreeTree: React.FC<ThreeTreeProps> = ({ data, rootTotalCost }) => {
             }
             .tooltip-title {
                 font-weight: 700;
-                color: #6366f1;
+                color: #2e7d32;
                 margin-bottom: 12px;
                 font-size: 1.25rem;
                 letter-spacing: -0.02em;
-                text-shadow: 0 2px 8px rgba(99, 102, 241, 0.2);
+                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
             }
             .tooltip-divider {
                 height: 2px;
-                background: linear-gradient(90deg, rgba(99, 102, 241, 0.4), transparent);
+                background: linear-gradient(90deg, rgba(46, 125, 50, 0.4), transparent);
                 margin-bottom: 12px;
                 border-radius: 2px;
             }
@@ -890,14 +874,14 @@ const ThreeTree: React.FC<ThreeTreeProps> = ({ data, rootTotalCost }) => {
                 font-size: 1rem;
             }
             .tooltip-percentage {
-                color: #6366f1;
+                color: #2e7d32;
                 font-weight: 700;
                 font-size: 1.15rem;
             }
             .tooltip-badge {
                 margin-top: 12px;
                 padding: 6px 12px;
-                background: linear-gradient(135deg, #6366f1, #8b5cf6);
+                background: linear-gradient(135deg, #2e7d32, #66bb6a);
                 color: white;
                 text-align: center;
                 border-radius: 8px;
