@@ -1,10 +1,10 @@
 import React, { useRef, useState, useMemo, useEffect } from 'react';
-import { Canvas, extend, useFrame } from '@react-three/fiber';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Html, PerspectiveCamera, Text, Billboard } from '@react-three/drei';
 import * as THREE from 'three';
 import type { CostNode } from '../utils/dataProcessor';
 
-extend(THREE);
+// extend(THREE); // Removed to fix TS error and not needed for standard elements
 
 // Modern color scheme - gradient from deep blue to gold representing cost flow
 const getCostColor = (ratio: number, isLeaf = false): string => {
@@ -119,7 +119,7 @@ const Branch: React.FC<BranchProps> = ({
     if (isLeaf) return null;
 
     const branches: React.ReactElement[] = [];
-    const spreadFactor = Math.max(0.5, 2.5 - level * 0.3);
+
 
     validChildren.sort((a, b) => b.totalCost - a.totalCost);
 
@@ -592,7 +592,7 @@ const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, rootTotalCost, 
   );
 };
 
-const UIOverlay: React.FC<{ data: CostNode; rootTotalCost: number }> = ({ data, rootTotalCost }) => {
+const UIOverlay: React.FC<{ rootTotalCost: number }> = ({ rootTotalCost }) => {
     return (
         <div style={{
             position: 'absolute',
@@ -827,7 +827,7 @@ const ThreeTree: React.FC<ThreeTreeProps> = ({ data, rootTotalCost }) => {
         </Canvas>
 
         {/* UI Overlay */}
-        <UIOverlay data={data} rootTotalCost={rootTotalCost} />
+        <UIOverlay rootTotalCost={rootTotalCost} />
 
         {/* Node Detail Panel */}
         {selectedNode && (
